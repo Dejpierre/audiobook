@@ -358,6 +358,82 @@
     /* ── Transitions de contenu ── */
     .fade-out { opacity: 0 !important; }
 
+    /* ── Speech toggle ── */
+    #speech-zone {
+      flex-shrink: 0;
+      padding: 0 32px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #speech-btn {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: transparent;
+      color: rgba(255,255,255,0.45);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.3s, color 0.3s;
+    }
+
+    #speech-btn:hover { border-color: rgba(255,255,255,0.35); color: rgba(255,255,255,0.75); }
+
+    #speech-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    #speech-btn.denied { opacity: 0.4; cursor: not-allowed; }
+
+    .speech-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    #speech-btn.active .speech-dot {
+      animation: speech-blink 1.1s ease-in-out infinite;
+    }
+
+    @keyframes speech-blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.15; }
+    }
+
+    /* ── Transcript toast ── */
+    #transcript-toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 90;
+      background: rgba(10,10,15,0.82);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      font-style: italic;
+      white-space: nowrap;
+      max-width: 80vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    #transcript-toast.show { opacity: 1; }
+
     /* ── Indicator "playing" (cercle respirant dans le bouton) ── */
     @keyframes breath {
       0%, 100% { transform: scale(1); }
@@ -369,6 +445,9 @@
   </style>
 </head>
 <body class="paused">
+
+  <!-- Toast de reconnaissance vocale -->
+  <div id="transcript-toast"></div>
 
   <!-- Overlay de démarrage -->
   <div id="start-overlay">
@@ -425,10 +504,18 @@
       <div id="progress-dots"></div>
       <span id="page-count">1/1</span>
     </div>
+
+    <div id="speech-zone">
+      <button id="speech-btn" aria-label="Activer l'écoute automatique">
+        <span class="speech-dot"></span>
+        <span id="speech-label">Écoute auto</span>
+      </button>
+    </div>
   </div>
 
   <script src="data/books.js"></script>
   <script src="js/audio.js"></script>
+  <script src="js/speech.js"></script>
   <script>
     /* ── Lecture des paramètres URL ── */
     const params   = new URLSearchParams(location.search);
@@ -509,6 +596,60 @@
       }, instant ? 0 : dur);
     }
 
+    /* ── Speech engine ── */
+    const elSpeechBtn   = document.getElementById('speech-btn');
+    const elSpeechLabel = document.getElementById('speech-label');
+    const elToast       = document.getElementById('transcript-toast');
+    let toastTimer      = null;
+    let speechEngine    = null;
+
+    function showToast(text) {
+      elToast.textContent = '« ' + text + ' »';
+      elToast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => elToast.classList.remove('show'), 2800);
+    }
+
+    function initSpeechEngine() {
+      if (speechEngine) return;
+      speechEngine = new SpeechEngine({
+        pages: book.pages,
+        onPageDetected: (index) => {
+          if (index === currentIndex || isTransitioning) return;
+          isTransitioning = true;
+          currentIndex = index;
+          applyPage(currentIndex, false);
+          ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance, 2)
+            .then(() => { isTransitioning = false; });
+        },
+        onTranscript: (text) => showToast(text),
+        onStateChange: (state) => {
+          if (state === 'listening') {
+            elSpeechBtn.classList.add('active');
+            elSpeechLabel.textContent = 'Écoute…';
+          } else if (state === 'idle') {
+            elSpeechBtn.classList.remove('active');
+            elSpeechLabel.textContent = 'Écoute auto';
+          } else if (state === 'denied') {
+            elSpeechBtn.classList.remove('active', 'denied');
+            elSpeechBtn.classList.add('denied');
+            elSpeechLabel.textContent = 'Micro refusé';
+          }
+        }
+      });
+
+      if (!speechEngine.supported) {
+        elSpeechBtn.classList.add('denied');
+        elSpeechLabel.textContent = 'Non supporté';
+      }
+    }
+
+    elSpeechBtn.addEventListener('click', () => {
+      if (elSpeechBtn.classList.contains('denied')) return;
+      initSpeechEngine();
+      speechEngine.toggle();
+    });
+
     /* ── Démarrage (premier tap sur l'overlay) ── */
     elStartOverlay.addEventListener('click', async () => {
       await ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance);
@@ -516,6 +657,7 @@
       document.body.classList.remove('paused');
       document.body.classList.add('playing');
       applyPage(currentIndex, true);
+      elSpeechBtn.style.display = 'flex';  // révèle le bouton après démarrage
     });
 
     /* ── Tap principal : page suivante ── */
@@ -544,12 +686,14 @@
 
     /* ── Restart ── */
     elRestartBtn.addEventListener('click', () => {
+      speechEngine?.stop();
       currentIndex = 0;
       elEndScreen.classList.remove('visible');
       applyPage(0, true);
       elStartOverlay.classList.remove('hidden');
       document.body.classList.remove('playing');
       document.body.classList.add('paused');
+      elSpeechBtn.style.display = 'none';
     });
 
     /* ── Affichage initial (sans audio) ── */
