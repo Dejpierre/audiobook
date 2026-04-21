@@ -34,6 +34,7 @@ const BOOKS = {
         description: "Dans la petite maison vivait une loutre douce et discrète, gardienne d'un travail secret.",
         ambiance: "ocean",
         color: "#082E43",
+        audioSrc: "audio/lac-page-2.mp3",
         endTrigger: ["connaissait", "particulier", "loutre"]
       },
       {
