@@ -661,12 +661,12 @@
 
     /* ── Démarrage (premier tap sur l'overlay) ── */
     elStartOverlay.addEventListener('click', async () => {
-      await playAudio(currentIndex);
+      try { await playAudio(currentIndex); } catch (e) { console.error('Audio:', e); }
       elStartOverlay.classList.add('hidden');
       document.body.classList.remove('paused');
       document.body.classList.add('playing');
       applyPage(currentIndex, true);
-      elSpeechBtn.style.display = 'flex';  // révèle le bouton après démarrage
+      elSpeechBtn.style.display = 'flex';
     });
 
     /* ── Tap principal : page suivante ── */
