@@ -24,6 +24,7 @@ const BOOKS = {
         description: "Tout au bord du lac, cachée entre les grands arbres, une petite maison de bois attend la nuit.",
         ambiance: "forest",
         color: "#1A4A2A",
+        audioSrc: "audio/lac.mp3",
         endTrigger: ["magie", "commençait"]
       },
       {
