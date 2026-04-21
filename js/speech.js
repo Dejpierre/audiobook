@@ -1,15 +1,21 @@
 /**
  * SpeechEngine — reconnaissance vocale pour changement d'ambiance automatique.
  *
+ * Deux modes de détection par page (priorité au premier disponible) :
+ *   1. endTrigger  — mots de la dernière phrase : détection séquentielle,
+ *                    avance toujours à la page suivante
+ *   2. keywords    — scoring global sur toutes les pages (fallback)
+ *
  * API publique :
- *   engine.start()   → démarre l'écoute (retourne false si non supporté)
- *   engine.stop()    → arrête l'écoute
- *   engine.toggle()  → bascule actif/inactif
+ *   engine.start()              → démarre l'écoute
+ *   engine.stop()               → arrête l'écoute
+ *   engine.toggle()             → bascule actif/inactif
+ *   engine.setCurrentPage(idx)  → synchronise la page courante
  *
  * Callbacks :
- *   onPageDetected(index)  — index de page détecté dans book.pages
- *   onTranscript(text)     — dernier fragment reconnu
- *   onStateChange(state)   — 'listening' | 'idle' | 'denied'
+ *   onPageDetected(index)   — index cible dans book.pages
+ *   onTranscript(text)      — dernier fragment reconnu
+ *   onStateChange(state)    — 'listening' | 'idle' | 'denied'
  */
 class SpeechEngine {
   constructor({ pages, onPageDetected, onTranscript, onStateChange }) {
@@ -18,19 +24,23 @@ class SpeechEngine {
     this.onTranscript   = onTranscript;
     this.onStateChange  = onStateChange;
 
-    this.recognition  = null;
-    this.active       = false;
-    this.buffer       = '';
-    this.lastChangedAt = 0;
+    this.recognition    = null;
+    this.active         = false;
+    this.buffer         = '';
+    this.currentIdx     = 0;
+    this.lastChangedAt  = 0;
 
-    // Paramètres de détection
-    this.COOLDOWN_MS  = 7000;   // délai minimal entre deux changements
-    this.BUFFER_CHARS = 600;    // taille max du buffer roulant
-    this.MIN_MATCHES  = 2;      // mots-clés minimum pour déclencher
+    this.COOLDOWN_MS    = 5000;
+    this.BUFFER_CHARS   = 500;
   }
 
   get supported() {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  setCurrentPage(index) {
+    this.currentIdx = index;
+    this.buffer     = '';  // repart d'un buffer propre à chaque nouvelle page
   }
 
   start() {
@@ -55,12 +65,9 @@ class SpeechEngine {
       this._detect();
     };
 
-    // Redémarre automatiquement si l'écoute s'interrompt
     this.recognition.onend = () => {
       if (this.active) {
-        setTimeout(() => {
-          try { this.recognition?.start(); } catch (_) {}
-        }, 250);
+        setTimeout(() => { try { this.recognition?.start(); } catch (_) {} }, 250);
       }
     };
 
@@ -70,7 +77,6 @@ class SpeechEngine {
         this.recognition = null;
         this.onStateChange?.('denied');
       }
-      // Les erreurs 'no-speech' et 'aborted' sont silencieuses — onend relance
     };
 
     this.active = true;
@@ -100,25 +106,39 @@ class SpeechEngine {
   _detect() {
     if (Date.now() - this.lastChangedAt < this.COOLDOWN_MS) return;
 
-    let bestIdx   = -1;
-    let bestScore = 0;
+    const page = this.pages[this.currentIdx];
+    if (!page) return;
 
-    this.pages.forEach((page, i) => {
-      const kws = page.keywords;
+    // Mode 1 : endTrigger — surveille uniquement la fin de la page courante
+    if (page.endTrigger?.length) {
+      const hits = page.endTrigger.filter(w => this.buffer.includes(w.toLowerCase())).length;
+      const needed = Math.min(2, page.endTrigger.length);
+      if (hits >= needed) {
+        const next = this.currentIdx + 1;
+        if (next < this.pages.length) {
+          this._trigger(next);
+        }
+      }
+      return;
+    }
+
+    // Mode 2 : keywords — scoring global sur toutes les pages (fallback)
+    let bestIdx = -1, bestScore = 0;
+    this.pages.forEach((p, i) => {
+      const kws = p.keywords;
       if (!kws?.length) return;
-
-      const hits  = kws.filter(kw => this.buffer.includes(kw.toLowerCase())).length;
-      if (hits < this.MIN_MATCHES) return;
-
+      const hits = kws.filter(kw => this.buffer.includes(kw.toLowerCase())).length;
+      if (hits < 2) return;
       const score = hits / kws.length;
       if (score > bestScore) { bestScore = score; bestIdx = i; }
     });
+    if (bestIdx >= 0) this._trigger(bestIdx);
+  }
 
-    if (bestIdx >= 0) {
-      this.lastChangedAt = Date.now();
-      this.buffer        = '';  // repart d'un buffer propre après détection
-      this.onPageDetected?.(bestIdx);
-    }
+  _trigger(index) {
+    this.lastChangedAt = Date.now();
+    this.buffer        = '';
+    this.onPageDetected?.(index);
   }
 }
 

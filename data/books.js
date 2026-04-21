@@ -8,6 +8,8 @@
  *   description – courte phrase d'ambiance
  *   ambiance   – clé du moteur audio : fire | tavern | forest | rain | storm | ocean | cave | mystery
  *   color      – teinte de fond (hex)
+ *   endTrigger – mots de la dernière phrase : détectés à voix haute → passe à la page suivante
+ *   keywords   – fallback si pas d'endTrigger : scoring global pour sauter à une page
  */
 const BOOKS = {
   1: {
@@ -18,20 +20,20 @@ const BOOKS = {
       {
         id: 1,
         chapter: "Prologue",
-        title: "La Taverne du Vieux Sage",
-        description: "Le crépitement du feu et les murmures des voyageurs vous accueillent dans la chaleur de l'auberge.",
-        ambiance: "tavern",
-        color: "#7A3010",
-        keywords: ["taverne", "auberge", "feu", "flamme", "voyageur", "chaleur", "chandelle", "bière", "cheminée", "aubergiste", "bois crépite", "fumée"]
+        title: "La Petite Maison du Lac",
+        description: "Tout au bord du lac, cachée entre les grands arbres, une petite maison de bois attend la nuit.",
+        ambiance: "forest",
+        color: "#1A4A2A",
+        endTrigger: ["magie", "commençait"]
       },
       {
         id: 2,
         chapter: "Chapitre I",
-        title: "La Forêt Ancienne",
-        description: "Les arbres millénaires chuchotent leurs secrets dans le vent. Des chants d'oiseaux vous guident.",
-        ambiance: "forest",
-        color: "#1A4A2A",
-        keywords: ["forêt", "arbres", "branches", "feuilles", "oiseaux", "sentier", "mousse", "racines", "vent", "taillis", "sous-bois", "chêne"]
+        title: "La Loutre et sa Lanterne",
+        description: "Dans la petite maison vivait une loutre douce et discrète, gardienne d'un travail secret.",
+        ambiance: "ocean",
+        color: "#082E43",
+        endTrigger: ["connaissait", "particulier", "loutre"]
       },
       {
         id: 3,

@@ -618,6 +618,7 @@
           if (index === currentIndex || isTransitioning) return;
           isTransitioning = true;
           currentIndex = index;
+          speechEngine.setCurrentPage(currentIndex);
           applyPage(currentIndex, false);
           ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance, 2)
             .then(() => { isTransitioning = false; });
@@ -676,8 +677,8 @@
 
       isTransitioning = true;
       currentIndex = next;
+      speechEngine?.setCurrentPage(currentIndex);
 
-      // Transition visuelle + audio simultanées
       applyPage(currentIndex, false);
       await ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance, 2);
 
