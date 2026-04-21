@@ -282,10 +282,8 @@ class AmbientEngine {
     await this.init();
     if (this._birdTimer) { clearTimeout(this._birdTimer); this._birdTimer = null; }
 
-    // Utilise un élément <audio> pour la lecture MP3 (compatibilité maximale)
     const audioEl = new Audio(url);
     audioEl.loop = true;
-    audioEl.crossOrigin = 'anonymous';
 
     const src = this.ctx.createMediaElementSource(audioEl);
     const out  = this.ctx.createGain();
@@ -293,7 +291,7 @@ class AmbientEngine {
     src.connect(out);
     out.connect(this.masterGain);
 
-    await audioEl.play();
+    audioEl.play().catch(err => console.warn('MP3:', err));
 
     const newLayer = { out, nodes: [out], audioEl, type: url };
     const now = this.ctx.currentTime;
