@@ -277,6 +277,49 @@ class AmbientEngine {
     this._birdTimer = setTimeout(schedule, 1500);
   }
 
+  /* ── Lecture d'un fichier MP3 avec crossfade ── */
+  async crossfadeToUrl(url, fadeSec = 2) {
+    await this.init();
+    if (this._birdTimer) { clearTimeout(this._birdTimer); this._birdTimer = null; }
+
+    console.log('[audio] fetch →', url);
+    const arrayBuffer = await fetch(url).then(r => r.arrayBuffer());
+    console.log('[audio] arrayBuffer size:', arrayBuffer.byteLength);
+
+    const audioBuffer = await new Promise((resolve, reject) =>
+      this.ctx.decodeAudioData(arrayBuffer, resolve, reject)
+    );
+    console.log('[audio] decoded, duration:', audioBuffer.duration);
+
+    const out = this.ctx.createGain();
+    out.gain.value = 0;
+    out.connect(this.masterGain);
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.loop   = true;
+    src.connect(out);
+    src.start();
+    console.log('[audio] playing');
+
+    const newLayer = { out, nodes: [out, src], type: url };
+    const now = this.ctx.currentTime;
+
+    out.gain.setValueAtTime(0, now);
+    out.gain.linearRampToValueAtTime(1, now + fadeSec);
+
+    if (this.currentLayer) {
+      const old = this.currentLayer;
+      old.out.gain.setValueAtTime(old.out.gain.value, now);
+      old.out.gain.linearRampToValueAtTime(0, now + fadeSec);
+      setTimeout(() => {
+        old.nodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch (_) {} });
+      }, (fadeSec + 0.3) * 1000);
+    }
+
+    this.currentLayer = newLayer;
+  }
+
   /* ── API publique ── */
   async crossfadeTo(type, fadeSec = 2) {
     await this.init();
