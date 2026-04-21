@@ -282,18 +282,23 @@ class AmbientEngine {
     await this.init();
     if (this._birdTimer) { clearTimeout(this._birdTimer); this._birdTimer = null; }
 
-    const audioEl = new Audio(url);
-    audioEl.loop = true;
+    const arrayBuffer = await fetch(url).then(r => r.arrayBuffer());
+    // Forme callback pour compatibilité Safari
+    const audioBuffer = await new Promise((resolve, reject) =>
+      this.ctx.decodeAudioData(arrayBuffer, resolve, reject)
+    );
 
-    const src = this.ctx.createMediaElementSource(audioEl);
-    const out  = this.ctx.createGain();
+    const out = this.ctx.createGain();
     out.gain.value = 0;
-    src.connect(out);
     out.connect(this.masterGain);
 
-    audioEl.play().catch(err => console.warn('MP3:', err));
+    const src = this.ctx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.loop   = true;
+    src.connect(out);
+    src.start();
 
-    const newLayer = { out, nodes: [out], audioEl, type: url };
+    const newLayer = { out, nodes: [out, src], type: url };
     const now = this.ctx.currentTime;
 
     out.gain.setValueAtTime(0, now);
@@ -304,7 +309,6 @@ class AmbientEngine {
       old.out.gain.setValueAtTime(old.out.gain.value, now);
       old.out.gain.linearRampToValueAtTime(0, now + fadeSec);
       setTimeout(() => {
-        old.audioEl?.pause();
         old.nodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch (_) {} });
       }, (fadeSec + 0.3) * 1000);
     }
@@ -348,7 +352,6 @@ class AmbientEngine {
     layer.out.gain.setValueAtTime(layer.out.gain.value, now);
     layer.out.gain.linearRampToValueAtTime(0, now + fadeSec);
     setTimeout(() => {
-      layer.audioEl?.pause();
       layer.nodes.forEach(n => { try { n.stop?.(); n.disconnect?.(); } catch (_) {} });
     }, (fadeSec + 0.3) * 1000);
     this.currentLayer = null;
