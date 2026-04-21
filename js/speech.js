@@ -29,9 +29,12 @@ class SpeechEngine {
     this.buffer         = '';
     this.currentIdx     = 0;
     this.lastChangedAt  = 0;
+    this._watchdog      = null;
 
     this.COOLDOWN_MS    = 5000;
     this.BUFFER_CHARS   = 500;
+    // Safari arrête l'écoute après ~7s de silence — on relance avant
+    this.WATCHDOG_MS    = 6000;
   }
 
   get supported() {
@@ -54,6 +57,7 @@ class SpeechEngine {
     this.recognition.maxAlternatives = 1;
 
     this.recognition.onresult = (e) => {
+      this._resetWatchdog();
       let text = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) text += e.results[i][0].transcript + ' ';
@@ -66,8 +70,9 @@ class SpeechEngine {
     };
 
     this.recognition.onend = () => {
+      clearTimeout(this._watchdog);
       if (this.active) {
-        setTimeout(() => { try { this.recognition?.start(); } catch (_) {} }, 250);
+        setTimeout(() => { try { this.recognition?.start(); } catch (_) {} }, 150);
       }
     };
 
@@ -83,6 +88,7 @@ class SpeechEngine {
     this.onStateChange?.('listening');
     try {
       this.recognition.start();
+      this._resetWatchdog();
       return true;
     } catch (_) {
       this.active = false;
@@ -94,9 +100,20 @@ class SpeechEngine {
   stop() {
     this.active = false;
     this.buffer = '';
+    clearTimeout(this._watchdog);
     try { this.recognition?.abort(); } catch (_) {}
     this.recognition = null;
     this.onStateChange?.('idle');
+  }
+
+  // Relance proactivement avant que Safari ne coupe l'écoute
+  _resetWatchdog() {
+    clearTimeout(this._watchdog);
+    this._watchdog = setTimeout(() => {
+      if (!this.active) return;
+      try { this.recognition?.stop(); } catch (_) {}
+      // onend se chargera du redémarrage
+    }, this.WATCHDOG_MS);
   }
 
   toggle() {
