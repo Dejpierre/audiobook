@@ -596,6 +596,14 @@
       }, instant ? 0 : dur);
     }
 
+    /* ── Lecture audio (MP3 ou procédural) ── */
+    function playAudio(index, fadeSec = 2) {
+      const page = book.pages[index];
+      return page.audioSrc
+        ? ambientEngine.crossfadeToUrl(page.audioSrc, fadeSec)
+        : ambientEngine.crossfadeTo(page.ambiance, fadeSec);
+    }
+
     /* ── Speech engine ── */
     const elSpeechBtn   = document.getElementById('speech-btn');
     const elSpeechLabel = document.getElementById('speech-label');
@@ -620,7 +628,7 @@
           currentIndex = index;
           speechEngine.setCurrentPage(currentIndex);
           applyPage(currentIndex, false);
-          ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance, 2)
+          playAudio(currentIndex, 2)
             .then(() => { isTransitioning = false; });
         },
         onTranscript: (text) => showToast(text),
@@ -653,7 +661,7 @@
 
     /* ── Démarrage (premier tap sur l'overlay) ── */
     elStartOverlay.addEventListener('click', async () => {
-      await ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance);
+      await playAudio(currentIndex);
       elStartOverlay.classList.add('hidden');
       document.body.classList.remove('paused');
       document.body.classList.add('playing');
@@ -680,7 +688,7 @@
       speechEngine?.setCurrentPage(currentIndex);
 
       applyPage(currentIndex, false);
-      await ambientEngine.crossfadeTo(book.pages[currentIndex].ambiance, 2);
+      await playAudio(currentIndex, 2);
 
       isTransitioning = false;
     });
